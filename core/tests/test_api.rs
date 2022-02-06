@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use jstime_core as jstime;
 
 mod common;

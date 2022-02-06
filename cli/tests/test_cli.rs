@@ -91,6 +91,15 @@ first second %s
 }
 
 #[test]
+fn fetch() {
+    Command::cargo_bin("jstime")
+        .unwrap()
+        .arg("./tests/fixtures/fetch.js")
+        .assert()
+        .code(0);
+}
+
+#[test]
 fn top_level_await() {
     Command::cargo_bin("jstime")
         .unwrap()

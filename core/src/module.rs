@@ -50,7 +50,7 @@ impl Loader {
                 let res = m.evaluate(scope).unwrap();
                 let promise = unsafe { v8::Local::<v8::Promise>::cast(res) };
                 match promise.state() {
-                    v8::PromiseState::Pending => panic!(),
+                    v8::PromiseState::Pending => Ok(res),
                     v8::PromiseState::Fulfilled => Ok(promise.result(scope)),
                     v8::PromiseState::Rejected => Err(promise.result(scope)),
                 }

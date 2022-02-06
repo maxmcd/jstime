@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
-
+use std::thread;
+use v8::Handle;
 mod builtins;
 mod isolate_state;
 mod js_loading;
@@ -43,6 +44,7 @@ impl Options {
 pub struct JSTime {
     isolate: Option<v8::OwnedIsolate>,
     taking_snapshot: bool,
+    // pending_promises: Vec<v8::Global<v8::Promise>>,
 }
 
 impl JSTime {
@@ -140,10 +142,24 @@ impl JSTime {
         let mut cwd = std::env::current_dir().unwrap();
         cwd.push("jstime");
         let cwd = cwd.into_os_string().into_string().unwrap();
-        match loader.import(scope, &cwd, filename) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.to_string(scope).unwrap().to_rust_string_lossy(scope)),
-        }
+        let res = match loader.import(scope, &cwd, filename) {
+            Ok(res) => res,
+            Err(e) => return Err(e.to_string(scope).unwrap().to_rust_string_lossy(scope)),
+        };
+
+        while builtins::tick(scope) {}
+        // let resolver_global = scope
+        //     .remove_slot::<v8::Global<v8::PromiseResolver>>()
+        //     .unwrap();
+        // let resolver = resolver_global.open(scope);
+        // let null = v8::null(scope);
+        // resolver.resolve(scope, null.into());
+        // let promise = unsafe { v8::Local::<v8::Promise>::cast(res) };
+        // println!("{:?}", promise.state());
+        // // let resolver = unsafe { resolver_global.get_unchecked() };
+        // // resolver.resolve(scope);
+        // promise.result(scope);
+        Ok(())
     }
 
     /// Run a script and get a string representation of the result.
@@ -164,7 +180,6 @@ impl JSTime {
         ) {
             // do nothing
         }
-
         scope.perform_microtask_checkpoint();
     }
 
@@ -172,6 +187,11 @@ impl JSTime {
         self.pump_v8_message_loop();
 
         Ok(())
+    }
+    pub fn do_yo_thing(&mut self) {
+        let scope = &mut self.handle_scope();
+        let prom = scope.get_slot::<v8::Global<v8::Promise>>().unwrap();
+        println!("{:?}", prom)
     }
 }
 
