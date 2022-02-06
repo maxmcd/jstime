@@ -1,2 +1,4 @@
 target/
 .vscode/
+wasm_exec.js
+.prettierignore

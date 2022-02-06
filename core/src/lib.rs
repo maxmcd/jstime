@@ -53,11 +53,13 @@ impl JSTime {
         if let Some(snapshot) = options.snapshot {
             create_params = create_params.snapshot_blob(snapshot);
         }
-        let isolate = v8::Isolate::new(create_params);
+        let mut isolate = v8::Isolate::new(create_params);
+        // isolate.set_microtasks_policy(v8::MicrotasksPolicy::Explicit);
         JSTime::create(options, isolate)
     }
 
     pub fn create_snapshot(mut options: Options) -> Vec<u8> {
+        println!("create snapshot");
         assert!(
             options.snapshot.is_none(),
             "Cannot pass snapshot data while creating snapshot"
@@ -100,11 +102,15 @@ impl JSTime {
 
         isolate.set_slot(IsolateState::new(global_context));
 
-        // If snapshot data was provided, the builtins already exist within it.
-        if options.snapshot.is_none() {
+        {
             let context = IsolateState::get(&mut isolate).borrow().context();
             let scope = &mut v8::HandleScope::with_context(&mut isolate, context);
-            builtins::Builtins::create(scope);
+
+            // If snapshot data was provided, the builtins already exist within it.
+            if options.snapshot.is_none() {
+                builtins::Builtins::create(scope);
+            }
+            builtins::Builtins::init(scope);
         }
 
         JSTime {
@@ -121,11 +127,14 @@ impl JSTime {
             },
         }
     }
+    fn handle_scope(&mut self) -> v8::HandleScope {
+        let context = IsolateState::get(self.isolate()).borrow().context();
+        v8::HandleScope::with_context(self.isolate(), context)
+    }
 
     /// Import a module by filename.
     pub fn import(&mut self, filename: &str) -> Result<(), String> {
-        let context = IsolateState::get(self.isolate()).borrow().context();
-        let scope = &mut v8::HandleScope::with_context(self.isolate(), context);
+        let scope = &mut self.handle_scope();
         let loader = module::Loader::new();
 
         let mut cwd = std::env::current_dir().unwrap();
@@ -145,6 +154,24 @@ impl JSTime {
             Ok(v) => Ok(v.to_string(scope).unwrap().to_rust_string_lossy(scope)),
             Err(e) => Err(e.to_string(scope).unwrap().to_rust_string_lossy(scope)),
         }
+    }
+    fn pump_v8_message_loop(&mut self) {
+        let scope = &mut self.handle_scope();
+        while v8::Platform::pump_message_loop(
+            &v8::V8::get_current_platform(),
+            scope,
+            false, // don't block if there are no tasks
+        ) {
+            // do nothing
+        }
+
+        scope.perform_microtask_checkpoint();
+    }
+
+    pub fn poll_event_loop(&mut self) -> Result<(), String> {
+        self.pump_v8_message_loop();
+
+        Ok(())
     }
 }
 
